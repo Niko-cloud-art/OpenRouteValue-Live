@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>OpenRouteValue – Пилот София | Отворен асистент за маршрути и услуги</title>
+    <!-- OpenStreetMap / Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com" />
+    <style>
+        :root {
+            --primary: #1e40af;
+            --primary-light: #eff6ff;
+            --accent: #059669;
+            --accent-light: #ecfdf5;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #64748b;
+            --border: #e2e8f0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
+        header { background: var(--primary); color: white; padding: 16px; position: sticky; top: 0; z-index: 1000; }
+        header h1 { font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
+        header span.badge { font-size: 0.7rem; background: rgba(255,255,255,0.2); padding: 3px 8px; border-radius: 12px; font-weight: 500; }
+        header p { font-size: 0.8rem; opacity: 0.9; margin-top: 4px; }
+        
+        .controls { padding: 14px; background: var(--card); border-bottom: 1px solid var(--border); }
+        .control-group { margin-bottom: 12px; }
+        .control-group label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+        select, input[type="range"] { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; background: white; }
+        
+        .mode-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .mode-btn { padding: 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font-size: 0.85rem; font-weight: 600; cursor: pointer; text-align: center; transition: 0.2s; }
+        .mode-btn.active { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+        
+        .budget-display { display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; color: var(--primary); }
+        
+        .btn-generate { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; margin-top: 4px; }
+        .btn-generate:active { transform: scale(0.99); }
+
+        #map { height: 220px; width: 100%; z-index: 1; border-bottom: 1px solid var(--border); }
+
+        .results { padding: 14px; flex-grow: 1; }
+        .results-title { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; letter-spacing: 0.5px; }
+        
+        .scenario-card { background: var(--card); border: 2px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 14px; cursor: pointer; transition: 0.2s; }
+        .scenario-card.selected { border-color: var(--primary); box-shadow: 0 4px 12px rgba(30, 64, 175, 0.1); }
+        .scenario-card.optimal { border-color: var(--accent); }
+        .scenario-card.optimal.selected { box-shadow: 0 4px 12px rgba(5, 150, 105, 0.15); }
+
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .tag { font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; }
+        .tag-good { background: var(--primary-light); color: var(--primary); }
+        .tag-best { background: var(--accent-light); color: var(--accent); }
+        
+        .metrics { display: flex; gap: 12px; font-size: 0.85rem; font-weight: 600; margin-bottom: 10px; color: var(--text); }
+        .metrics span { display: flex; align-items: center; gap: 4px; }
+
+        .timeline { border-left: 2px dashed var(--border); margin-left: 8px; padding-left: 14px; }
+        .step { position: relative; margin-bottom: 10px; font-size: 0.85rem; }
+        .step:last-child { margin-bottom: 0; }
+        .step::before { content: ""; position: absolute; left: -19px; top: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+        .optimal .step::before { background: var(--accent); }
+        .step-title { font-weight: 600; }
+        .step-meta { font-size: 0.78rem; color: var(--muted); display: flex; justify-content: space-between; margin-top: 2px; }
+        .price-pill { font-weight: 600; color: var(--text); }
+
+        footer { text-align: center; padding: 12px; font-size: 0.72rem; color: var(--muted); border-top: 1px solid var(--border); background: var(--card); }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>OpenRouteValue <span class="badge">Пилот: София</span></h1>
+    <p>Отворен асистент без проследяване за маршрути, култура и услуги</p>
+</header>
+
+<div class="controls">
+    <div class="control-group">
+        <label>Начална точка и посока (София – Център / Южен район)</label>
+        <select id="corridorSelect">
+            <option value="serdika_ndk">Метростанция Сердика → НДК и Парк Южен</option>
+            <option value="su_zograf">СУ „Св. Климент Охридски“ → Национален музей Земята и хората</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label>Начин на придвижване</label>
+        <div class="mode-toggle">
+            <div class="mode-btn active" id="btnWalk" onclick="setMode('walk')">🚶 Пеша (0.00 €)</div>
+            <div class="mode-btn" id="btnTransit" onclick="setMode('transit')">🚇 Метро / Трамвай (0.82 €)</div>
+        </div>
+    </div>
+
+    <div class="control-group">
+        <div class="budget-display">
+            <span>Максимален бюджет за услуги:</span>
+            <span id="budgetVal">15.00 € (29.34 лв.)</span>
+        </div>
+        <input type="range" id="budgetRange" min="5" max="35" step="1" value="15" oninput="updateBudget(this.value)">
+    </div>
+
+    <button class="btn-generate" onclick="generateProposals()">Генерирай „Добро“ и „По-добро“ решение</button>
+</div>
+
+<div id="map"></div>
+
+<div class="results" id="resultsContainer">
+    <!-- Резултатите се зареждат динамично тук -->
+</div>
+
+<footer>
+    Open-Source Prototype (MIT License) • Данни: OpenStreetMap & Отворен каталог София • Zero User Tracking
+</footer>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com"></script>
+<script>
+    // Инициализация на отворената карта за София
+    const map = L.map('map').setView([42.6925, 23.3215], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let routeLayer = L.layerGroup().addTo(map);
+    let currentMode = 'walk';
+    let currentBudget = 15;
+    let activeProposals = [];
+
+    // Отворена база данни за пилотен регион София (Примерни реални локации и цени в EUR / BGN)
+    const sofiaCorridors = {
+        serdika_ndk: {
+            center: [42.6915, 23.3210],
+            good: {
+                type: "Добро решение (Бюджетно и директно)",
+                tagClass: "tag-good",
+                cardClass: "",
+                color: "#1e40af",
+                walkTime: 24,
+                transitTime: 9,
+                distanceKm: 1.9,
+                stops: [
+                    { name: "Античен комплекс Сердика (Отворен достъп)", category: "Култура / История", priceEur: 0.00, timeMin: 15, lat: 42.6978, lng: 23.3222 },
+                    { name: "Пекарна „Софийски занаяти“ (Кафе + закуска)", category: "Локална услуга", priceEur: 3.50, timeMin: 15, lat: 42.6922, lng: 23.3208 },
+                    { name: "НДК – Открита читалня и арт пространство", category: "Образование", priceEur: 0.00, timeMin: 20, lat: 42.6852, lng: 23.3189 }
+                ]
+            },
+            better: {
+                type: "По-добро решение (Оптимална стойност и преживяване)",
+                tagClass: "tag-best",
+                cardClass: "optimal",
+                color: "#059669",
+                walkTime: 32,
+                transitTime: 12,
+                distanceKm: 2.5,
+                stops: [
+                    { name: "Регионален исторически музей – София (Билет)", category: "Култура / Наука", priceEur: 4.10, timeMin: 40, lat: 42.6997, lng: 23.3235 },
+                    { name: "Независима книжарница и споделено пространство", category: "Образование / Книги", priceEur: 6.50, timeMin: 25, lat: 42.6908, lng: 23.3238 },
+                    { name: "Био кафене и социално предприятие до НДК", category: "Етична услуга", priceEur: 3.80, timeMin: 20, lat: 42.6861, lng: 23.3198 }
+                ]
+            }
+        },
+        su_zograf: {
+            center: [42.6865, 23.3280],
+            good: {
+                type: "Добро решение (Бърз образователен маршрут)",
+                tagClass: "tag-good",
+                cardClass: "",
+                color: "#1e40af",
+                walkTime: 28,
+                transitTime: 11,
+                distanceKm: 2.2,
+                stops: [
+                    { name: "Университетска ботаническа градина – София", category: "Наука / Природа", priceEur: 3.07, timeMin: 30, lat: 42.6946, lng: 23.3347 },
+                    { name: "Студентска столова / Бърз обяд (ул. Шипка)", category: "Локална услуга", priceEur: 4.50, timeMin: 20, lat: 42.6928, lng: 23.3358 },
+                    { name: "Градска градина – Свободна изложба", category: "Култура", priceEur: 0.00, timeMin: 15, lat: 42.6941, lng: 23.3248 }
+                ]
+            },
+            better: {
+</html>
